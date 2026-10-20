@@ -71,6 +71,50 @@
   let lastTap = { time: 0, x: 0, y: 0 };
   let resizeTimer = null;
 
+  // Cache de imágenes: evita que durante el giro aparezca la página anterior
+  // mientras el navegador termina de cargar/decodificar la siguiente.
+  const pageCache = new Map();
+
+  function ensurePageReady(page) {
+    if (!page || page < 1 || page > TOTAL_PAGES) return Promise.resolve();
+    if (pageCache.has(page)) return pageCache.get(page);
+
+    const promise = new Promise((resolve) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = pagePath(page);
+
+      const done = async () => {
+        try {
+          if (typeof img.decode === 'function') await img.decode();
+        } catch (_) {
+          // Algunos navegadores resuelven onload antes de que decode esté disponible.
+        }
+        resolve();
+      };
+
+      if (img.complete && img.naturalWidth) done();
+      else {
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      }
+    });
+
+    pageCache.set(page, promise);
+    return promise;
+  }
+
+  function ensurePagesReady(pages) {
+    return Promise.all((pages || []).filter(Boolean).map(ensurePageReady));
+  }
+
+  function warmAllPages() {
+    for (let page = 1; page <= TOTAL_PAGES; page += 1) {
+      // Se hace en segundo plano; navegación crítica vuelve a esperarlas si hace falta.
+      ensurePageReady(page);
+    }
+  }
+
   const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
   const isReadingMode = () => document.fullscreenElement === el.readerShell || focusMode;
   const readerHasFocus = () => isReadingMode() || el.readerShell.contains(document.activeElement);
@@ -145,12 +189,13 @@
 
   function prefetch(page) {
     if (page < 1 || page > TOTAL_PAGES) return;
-    const img = new Image();
-    img.src = pagePath(page);
+    ensurePageReady(page);
   }
 
   function canvasAvailableSize() {
+    const rect = el.readerCanvas.getBoundingClientRect();
     const style = window.getComputedStyle(el.readerCanvas);
+
     const px =
       parseFloat(style.paddingLeft || 0) +
       parseFloat(style.paddingRight || 0);
@@ -159,9 +204,31 @@
       parseFloat(style.paddingTop || 0) +
       parseFloat(style.paddingBottom || 0);
 
+    // Safari iOS y algunos navegadores embebidos (Teams, Outlook, etc.) pueden
+    // reportar dimensiones distintas durante el cambio a modo lectura. Nunca
+    // permitimos que el escenario sea más ancho que el viewport visual real.
+    const vv = window.visualViewport;
+    const viewportWidth = Math.max(
+      1,
+      Math.min(
+        window.innerWidth || rect.width,
+        vv && vv.width ? vv.width : Infinity,
+        rect.width || Infinity
+      )
+    );
+
+    const viewportHeight = Math.max(
+      1,
+      Math.min(
+        window.innerHeight || rect.height,
+        vv && vv.height ? vv.height : Infinity,
+        rect.height || Infinity
+      )
+    );
+
     return {
-      width: Math.max(1, el.readerCanvas.clientWidth - px),
-      height: Math.max(1, el.readerCanvas.clientHeight - py)
+      width: Math.max(1, Math.min(rect.width, viewportWidth) - px),
+      height: Math.max(1, Math.min(rect.height, viewportHeight) - py)
     };
   }
 
@@ -169,11 +236,13 @@
     const available = canvasAvailableSize();
     const mobile = isMobile();
 
-    const marginX = mobile ? 22 : 58;
-    const marginY = mobile ? 78 : 48;
+    const marginX = mobile ? 14 : 58;
+    const marginY = mobile ? 46 : 48;
 
-    const maxW = Math.max(220, available.width - marginX);
-    const maxH = Math.max(220, available.height - marginY);
+    // En móvil, el ancho manda. Esto impide el recorte lateral observado en
+    // iPhone/Android, incluso dentro de navegadores embebidos.
+    const maxW = Math.max(160, available.width - marginX);
+    const maxH = Math.max(180, available.height - marginY);
 
     const ratio = view.type === 'spread'
       ? PAGE_RATIO * 2
@@ -187,8 +256,17 @@
       width = height * ratio;
     }
 
-    el.pageStage.style.width = `${Math.floor(width)}px`;
-    el.pageStage.style.height = `${Math.floor(height)}px`;
+    if (mobile) {
+      width = Math.min(width, Math.max(160, available.width - 12));
+      height = width / PAGE_RATIO;
+      if (height > maxH) {
+        height = maxH;
+        width = height * PAGE_RATIO;
+      }
+    }
+
+    el.pageStage.style.width = `${Math.max(1, Math.floor(width))}px`;
+    el.pageStage.style.height = `${Math.max(1, Math.floor(height))}px`;
   }
 
   function activePages() {
@@ -370,17 +448,22 @@
     }
   }
 
-  function animateSingleTo(targetPage, direction) {
+  async function animateSingleTo(targetPage, direction) {
     if (animating) return;
 
+    animating = true;
+    updateControls();
+
     const targetView = viewFor(targetPage);
+    await ensurePagesReady(targetView.pages);
+
+    // El destino ya está cargado y decodificado antes de iniciar el giro.
 
     if (targetView.type !== 'single') {
       /* Portada -> primer pliego: preparamos el pliego detrás de la portada. */
       const current = viewFor(currentPage);
 
       if (current.type === 'single' && targetView.type === 'spread') {
-        animating = true;
         if (zoomScale > 1.01) resetZoom(false);
 
         /* La portada/contraportada conserva su tamaño individual mientras gira.
@@ -411,7 +494,6 @@
       }
     }
 
-    animating = true;
     if (zoomScale > 1.01) resetZoom(false);
 
     const currentView = viewFor(currentPage);
@@ -439,7 +521,9 @@
     updateControls();
   }
 
-  function animateSpreadForward(targetAnchor) {
+  async function animateSpreadForward(targetAnchor) {
+    if (animating) return;
+
     const currentView = viewFor(currentPage);
     const targetView = viewFor(targetAnchor);
 
@@ -448,46 +532,26 @@
       return;
     }
 
-    /* Último pliego -> contraportada:
-       la hoja derecha 15 gira; al terminar aparece la contraportada. */
-    if (targetView.type === 'single') {
-      animating = true;
-      if (zoomScale > 1.01) resetZoom(false);
-
-      setImg(el.turnFrontPage, currentView.pages[1]);
-      setImg(el.turnBackPage, targetView.pages[0]);
-      setImg(el.rightUnderPage, targetView.pages[0], false);
-
-      el.rightUnderLayer.classList.add('is-visible');
-      el.turningLeaf.classList.add('is-active');
-
-      requestAnimationFrame(() => {
-        el.turningLeaf.classList.add('turn-forward');
-      });
-
-      window.setTimeout(() => {
-        animating = false;
-        currentPage = targetView.anchor;
-        render(currentPage);
-      }, TURN_MS + 30);
-
-      updateControls();
-      return;
-    }
-
     animating = true;
+    updateControls();
+    await ensurePagesReady(targetView.pages);
+
     if (zoomScale > 1.01) resetZoom(false);
 
-    /* Ejemplo 2–3 -> 4–5:
-       - página 3 es el frente de la hoja que gira;
-       - página 4 es el reverso de esa misma hoja;
-       - página 5 ya está debajo, a la derecha.
-       Sólo la hoja derecha se mueve. */
+    /* El destino está completamente cargado antes del giro. La derecha que
+       aparecerá queda debajo desde el primer fotograma; la izquierda futura
+       vive en el reverso de la hoja animada. */
     setImg(el.turnFrontPage, currentView.pages[1]);
     setImg(el.turnBackPage, targetView.pages[0]);
-    setImg(el.rightUnderPage, targetView.pages[1]);
 
-    el.rightUnderLayer.classList.add('is-visible');
+    if (targetView.type === 'spread') {
+      setImg(el.rightUnderPage, targetView.pages[1], false);
+      el.rightUnderLayer.classList.add('is-visible');
+    } else {
+      setImg(el.rightUnderPage, targetView.pages[0], false);
+      el.rightUnderLayer.classList.add('is-visible');
+    }
+
     el.turningLeaf.classList.add('is-active');
 
     requestAnimationFrame(() => {
@@ -495,59 +559,73 @@
     });
 
     window.setTimeout(() => {
-      animating = false;
-      currentPage = targetView.anchor;
-      render(currentPage);
-    }, TURN_MS + 30);
+      if (targetView.type === 'spread') {
+        // Commit bajo la hoja ANTES de retirarla: no hay flash de la izquierda anterior.
+        setImg(el.leftPage, targetView.pages[0]);
+        setImg(el.rightPage, targetView.pages[1]);
+        currentPage = targetView.anchor;
+        updateIndicator();
+        updateThumbs();
 
-    updateControls();
+        requestAnimationFrame(() => {
+          clearAnimationClasses();
+          animating = false;
+          updateControls();
+        });
+      } else {
+        currentPage = targetView.anchor;
+        // La transición a contraportada requiere recentrar el escenario.
+        requestAnimationFrame(() => {
+          animating = false;
+          render(currentPage);
+        });
+      }
+    }, TURN_MS + 10);
   }
 
-  function animateSpreadBackward(targetAnchor) {
+  async function animateSpreadBackward(targetAnchor) {
+    if (animating) return;
+
     const currentView = viewFor(currentPage);
     const targetView = viewFor(targetAnchor);
 
     if (currentView.type !== 'spread') {
-      /* Contraportada -> último pliego */
-      if (currentView.type === 'single' && targetView.type === 'spread') {
-        /* La contraportada es una hoja individual: gira como tal y después reaparece el libro abierto. */
-        animateSingleTo(targetAnchor, 'prev');
-        return;
-      }
-
       animateSingleTo(targetAnchor, 'prev');
       return;
     }
 
     if (targetView.type === 'single') {
-      /* Primer pliego -> portada. La portada es la excepción individual. */
       animateSingleTo(targetAnchor, 'prev');
       return;
     }
 
     animating = true;
+    updateControls();
+    await ensurePagesReady(targetView.pages);
+
     if (zoomScale > 1.01) resetZoom(false);
 
-    /* Ejemplo 4–5 -> 2–3:
-       La página 3 (derecha objetivo) entra desde el lomo.
-       En el reverso lleva la página 4 (izquierda actual).
-       La página 2 queda revelada debajo a la izquierda.
-       El elemento animado sigue siendo una única hoja. */
+    /* Al retroceder, la página izquierda objetivo ya está debajo antes de que
+       la hoja empiece a regresar. Así jamás queda esperando una imagen nueva. */
     setImg(el.leftPage, targetView.pages[0]);
-    setImg(el.rightPage, currentView.pages[1]);
-
     setImg(el.turnFrontPage, targetView.pages[1]);
     setImg(el.turnBackPage, currentView.pages[0]);
 
     el.turningLeaf.classList.add('is-active', 'turn-backward');
 
     window.setTimeout(() => {
-      animating = false;
+      // Commit de la página derecha objetivo mientras la hoja aún la cubre.
+      setImg(el.rightPage, targetView.pages[1]);
       currentPage = targetView.anchor;
-      render(currentPage);
-    }, TURN_MS + 30);
+      updateIndicator();
+      updateThumbs();
 
-    updateControls();
+      requestAnimationFrame(() => {
+        clearAnimationClasses();
+        animating = false;
+        updateControls();
+      });
+    }, TURN_MS + 10);
   }
 
   function nextPage() {
@@ -658,12 +736,14 @@
   }
 
   function lockScroll() {
-    savedScrollY = window.scrollY || 0;
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = `-${savedScrollY}px`;
     document.body.classList.add('reader-focus-active');
   }
 
   function unlockScroll() {
     document.body.classList.remove('reader-focus-active');
+    document.body.style.top = '';
     window.scrollTo(0, savedScrollY);
   }
 
@@ -1023,8 +1103,12 @@
         currentPage = normalizeDesktopPage(previous);
       }
 
+      resetZoom(false);
       render(currentPage);
-    }, 140);
+
+      // iOS puede terminar de ajustar la barra del navegador algunos ms después.
+      window.setTimeout(() => fitStage(viewFor(currentPage)), 120);
+    }, 180);
   }
 
   window.addEventListener('resize', handleResize);
@@ -1069,4 +1153,5 @@
 
   buildThumbnails();
   render(1);
+  warmAllPages();
 })();

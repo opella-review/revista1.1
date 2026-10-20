@@ -35,3 +35,12 @@ Archivos específicos de esta versión:
 
 - `css/styles-spread.css`
 - `js/reader-spread.js`
+
+
+## Corrección V2
+
+- Precarga y decodifica la página destino antes de iniciar cada animación.
+- La página izquierda se actualiza debajo de la hoja animada antes de retirar el giro, eliminando el flash de la página anterior.
+- Ajuste específico para Safari/iPhone, Chrome/Android y navegadores embebidos (por ejemplo Teams).
+- El escenario móvil se limita al viewport visual real para evitar recortes laterales.
+- Modo lectura móvil usa `100dvh`, safe areas y bloqueo estable del scroll.
