@@ -817,9 +817,12 @@ a { color: inherit; }
   }
 }
 
-
 /* ============================================================
-   FIX MÓVIL + CARGA VISUAL V2
+   FIX MÓVIL V3
+   Centrado robusto para Safari iOS, Chrome Android y webviews.
+   Importante: en móvil el escenario deja de ser absoluto.
+   Así evitamos que un shorthand `inset` anule left/top y desplace
+   media página fuera del viewport.
    ============================================================ */
 
 body.reader-focus-active {
@@ -853,21 +856,48 @@ body.reader-focus-active {
     padding-right: max(7px, env(safe-area-inset-right));
   }
 
+  .reader-canvas,
+  .reader-shell.reading-active .reader-canvas {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    overflow: hidden;
+  }
+
   .reader-shell.reading-active .reader-canvas {
     flex: 1 1 auto;
-    width: 100%;
     height: auto !important;
     min-height: 0 !important;
-    padding: 6px max(6px, env(safe-area-inset-right)) calc(38px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
-    overflow: hidden;
+    padding:
+      8px
+      max(8px, env(safe-area-inset-right))
+      calc(40px + env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
     touch-action: none;
     overscroll-behavior: none;
   }
 
+  /*
+   * Ésta es la corrección principal:
+   * el page-stage participa en el grid del canvas y se centra solo.
+   * Ya no usamos left:50% + translate(-50%) en móvil.
+   */
   .page-stage {
-    /* Salvaguarda adicional: nunca puede exceder el viewport del teléfono. */
-    max-width: calc(100vw - 12px);
-    max-height: calc(100dvh - 118px);
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 auto !important;
+
+    max-width: calc(100% - 12px);
+    max-height: calc(100% - 12px);
+
+    transform:
+      translate3d(var(--pan-x, 0px), var(--pan-y, 0px), 0)
+      scale(var(--zoom, 1)) !important;
+    transform-origin: center center;
   }
 
   .single-view,
@@ -876,10 +906,22 @@ body.reader-focus-active {
     height: 100%;
   }
 
+  .single-layer {
+    inset: 0 !important;
+  }
+
   .single-layer img {
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+
+  .spread-view {
+    display: none !important;
+  }
+
+  .single-view {
+    display: block !important;
   }
 
   .swipe-hint {
@@ -894,10 +936,7 @@ body.reader-focus-active {
   }
 
   .page-stage {
-    left: 50% !important;
-    top: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
-    inset: auto !important;
+    max-width: calc(100% - 10px);
+    max-height: calc(100% - 10px);
   }
 }

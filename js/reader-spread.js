@@ -257,12 +257,20 @@
     }
 
     if (mobile) {
-      width = Math.min(width, Math.max(160, available.width - 12));
+      // Límite duro: jamás más ancho que el área real del canvas.
+      const safeW = Math.max(140, available.width - 10);
+      const safeH = Math.max(160, available.height - 10);
+
+      width = safeW;
       height = width / PAGE_RATIO;
-      if (height > maxH) {
-        height = maxH;
+
+      if (height > safeH) {
+        height = safeH;
         width = height * PAGE_RATIO;
       }
+
+      width = Math.min(width, safeW);
+      height = Math.min(height, safeH);
     }
 
     el.pageStage.style.width = `${Math.max(1, Math.floor(width))}px`;
@@ -513,10 +521,27 @@
     });
 
     window.setTimeout(() => {
-      animating = false;
+      /*
+       * Commit sin flash:
+       * la página destino ya está en la capa posterior y decodificada.
+       * Cambiamos también la capa frontal mientras aún está girada/casi invisible;
+       * sólo después retiramos la animación.
+       */
       currentPage = targetView.anchor;
-      render(currentPage);
-    }, SINGLE_TURN_MS + 30);
+      setImg(el.singleFrontPage, targetView.pages[0]);
+      setImg(el.singleBackPage, targetView.pages[0], false);
+
+      requestAnimationFrame(() => {
+        clearAnimationClasses();
+        animating = false;
+        updateControls();
+
+        const n = targetView.anchor;
+        for (let p = n - 2; p <= n + 2; p += 1) {
+          prefetch(p);
+        }
+      });
+    }, SINGLE_TURN_MS + 10);
 
     updateControls();
   }
