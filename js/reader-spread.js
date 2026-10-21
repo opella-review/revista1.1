@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const TOTAL_PAGES = 16;
-  const PAGE_RATIO = 1280 / 1437;
+  const TOTAL_PAGES = 10;
+  const PAGE_RATIO = 595.2 / 793.68;
   const TURN_MS = 860;
   const SINGLE_TURN_MS = 740;
 
@@ -10,6 +10,8 @@
   const MAX_ZOOM = 4;
   const ZOOM_STEP = 0.25;
   const DOUBLE_TAP_ZOOM = 2.15;
+
+  const PAGE_TITLES = ['Portada', 'ADerogyl', 'Allegra', 'Histiacil', 'Gama Histiacil', 'Pulmonarom: protección', 'Pulmonarom: presentaciones', 'Material POP', 'Charola negociada', 'Contraportada'];
 
   const pagePath = (n) => `pages/page-${String(n).padStart(2, '0')}.webp`;
   const thumbPath = (n) => `thumbs/page-${String(n).padStart(2, '0')}.webp`;
@@ -109,8 +111,9 @@
   }
 
   function warmAllPages() {
-    for (let page = 1; page <= TOTAL_PAGES; page += 1) {
-      // Se hace en segundo plano; navegación crítica vuelve a esperarlas si hace falta.
+    // Sólo precargar portada y primer pliego: evitar descargar toda la revista
+    // al abrir la web en conexiones móviles. Cada destino se decodifica antes de girar.
+    for (let page = 1; page <= Math.min(3, TOTAL_PAGES); page += 1) {
       ensurePageReady(page);
     }
   }
@@ -149,7 +152,7 @@
 
     const p = normalizeDesktopPage(page);
     if (p === 1) return 2;
-    if (p >= 14) return 16;
+    if (p >= TOTAL_PAGES - 2) return TOTAL_PAGES;
     return p + 2;
   }
 
@@ -157,7 +160,7 @@
     if (isMobile()) return Math.max(1, page - 1);
 
     const p = normalizeDesktopPage(page);
-    if (p === 16) return 14;
+    if (p === TOTAL_PAGES) return TOTAL_PAGES - 2;
     if (p <= 2) return 1;
     return p - 2;
   }
@@ -180,10 +183,10 @@
     img.src = pagePath(page);
     img.alt = alt
       ? (page === 1
-          ? 'Portada de Opella Winter Evolution'
+          ? 'Portada de Winter Evolution de Opella y Nadro'
           : page === TOTAL_PAGES
-            ? 'Contraportada de Opella Winter Evolution'
-            : `Página ${page} de Opella Winter Evolution`)
+            ? 'Contraportada de Winter Evolution de Opella y Nadro'
+            : `Página ${page} de Winter Evolution de Opella y Nadro: ${PAGE_TITLES[page - 1]}`)
       : '';
   }
 
@@ -721,7 +724,7 @@
           ? 'Ir a portada'
           : n === TOTAL_PAGES
             ? 'Ir a contraportada'
-            : `Ir a página ${n}`
+            : `Ir a página ${n}: ${PAGE_TITLES[n - 1]}`
       );
 
       const img = document.createElement('img');
@@ -735,7 +738,7 @@
           ? 'Portada'
           : n === TOTAL_PAGES
             ? 'Contraportada'
-            : `Página ${n}`;
+            : `${n}. ${PAGE_TITLES[n - 1]}`;
 
       button.append(img, label);
       button.addEventListener('click', () => goToPage(n));

@@ -376,7 +376,7 @@ a { color: inherit; }
 /* ============================================================
    OPELLA · VERSIÓN PLIEGO
    Portada/contraportada individuales.
-   En escritorio: páginas 2–15 se muestran en pares.
+   En escritorio: páginas 2–9 se muestran en pares.
    Sólo la hoja derecha gira al avanzar entre pliegos.
    ============================================================ */
 
@@ -818,7 +818,7 @@ a { color: inherit; }
 }
 
 /* ============================================================
-   FIX MÓVIL V3
+   FIX MÓVIL V4
    Centrado robusto para Safari iOS, Chrome Android y webviews.
    Importante: en móvil el escenario deja de ser absoluto.
    Así evitamos que un shorthand `inset` anule left/top y desplace
@@ -939,4 +939,86 @@ body.reader-focus-active {
     max-width: calc(100% - 10px);
     max-height: calc(100% - 10px);
   }
+}
+
+
+/* ============================================================
+   EDICIÓN OPELLA × NADRO · WINTER EVOLUTION (10 páginas)
+   Colores y proporciones tomados de la portada final del PDF.
+   ============================================================ */
+:root {
+  --green: #103b80;
+  --green-2: #087eaf;
+  --cream: #f2fbff;
+  --blue: #09a8d9;
+  --blue-light: #b5eeff;
+  --navy: #132b69;
+  --ink: #102b55;
+  --muted: #526c87;
+  --soft: #eaf7fc;
+  --reader: #0a234d;
+  --reader-2: #051730;
+  --line: rgba(16,59,128,.14);
+  --shadow: 0 30px 90px rgba(4,33,78,.22);
+}
+.site-header {
+  background: rgba(13,54,113,.96);
+  border-bottom: 1px solid rgba(255,255,255,.15);
+}
+.edition-pill {
+  color: #f5fdff;
+  border-color: rgba(255,255,255,.28);
+  background: rgba(255,255,255,.10);
+}
+.hero {
+  background:
+    radial-gradient(circle at 80% 20%, rgba(204,247,255,.33), transparent 32%),
+    radial-gradient(circle at 10% 90%, rgba(0,198,241,.45), transparent 36%),
+    linear-gradient(145deg, #0a3674 0%, #078cc5 52%, #05588e 100%);
+}
+.hero::before {
+  opacity: .38;
+  background-image:
+    radial-gradient(circle at 19% 27%, rgba(255,255,255,.8) 0 2px, transparent 3px),
+    radial-gradient(circle at 72% 61%, rgba(255,255,255,.7) 0 2px, transparent 3px),
+    radial-gradient(circle at 36% 79%, rgba(255,255,255,.65) 0 1.5px, transparent 3px);
+}
+.hero h1 span { color: #d7f9ff; }
+.hero-logo { width: min(228px,52vw); }
+.hero-subtitle { color: #fff; }
+.hero-text { color: rgba(255,255,255,.88); }
+.btn-primary { background: #ffffff; color: #123c78; }
+.btn-primary:hover { background: #e7f8ff; }
+.btn-secondary { color: #fff; border-color: rgba(255,255,255,.45); }
+.hero-meta { color: rgba(255,255,255,.85); }
+.hero-meta b { color: #fff; }
+.mockup-wrap { isolation: isolate; }
+.mockup {
+  width: min(435px, 38vw);
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  border-radius: 3px;
+  box-shadow: 0 36px 74px rgba(0,23,69,.39), -9px 0 0 rgba(234,248,255,.65);
+  transform: translateY(4px) rotate(3deg);
+  filter: none;
+}
+.mockup-wrap:hover .mockup { transform: translateY(-5px) rotate(1deg) scale(1.012); }
+.hero-orb-one { background: rgba(174,242,255,.38); }
+.hero-orb-two { background: rgba(255,255,255,.22); }
+.reader-section { background: linear-gradient(180deg, #f2fbff, #e3f3fb); }
+.reader-shell { border-color: rgba(4,54,112,.16); }
+.thumb.active { border-color: #54d4fb; box-shadow: 0 0 0 2px rgba(84,212,251,.23); }
+.thumb img, .thumb.portrait img { aspect-ratio: 3 / 4; object-fit: cover; }
+.site-footer {
+  color: rgba(255,255,255,.8);
+  background: #0d3671;
+  border-top-color: rgba(255,255,255,.14);
+}
+@media (max-width: 900px) {
+  .mockup { width: min(340px, 65vw); max-width: 100%; }
+}
+@media (max-width: 620px) {
+  .mockup { width: min(270px, 61vw); }
+  .hero { gap: 32px; }
+  .hero-logo { width: 182px; }
 }
